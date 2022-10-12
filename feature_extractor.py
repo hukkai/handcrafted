@@ -40,38 +40,39 @@ indexes = np.array(indexes).T
 
 @jit(nopython=True, fastmath=True)
 def get_spatial_features(keypoint: np.array, bins: int):
-    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    """Given the keypoint skeleton, a numpy array of size (num_key_points, T,
     2), returns the spatial features, a one-dimensional array.
 
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
-            number of frames and `P` is the number of key points.
+        keypoint (np.array): numpy array of size of (P, T, 2) where `T` is the
+        number of frames and `P` is the number of key points.
         bins (int): number of bins.
     Returns:
         np.ndarray: the one-dimensional spatial features.
     """
 
-    # shape of vectors: [T, P(P-1)/2, 2]
-    vectors = keypoint[:, indexes[0]] - keypoint[:, indexes[1]]
+    # shape of vectors: P(P-1)/2, T, 2
+    vectors = keypoint[indexes[0]] - keypoint[indexes[1]]
 
-    distance = np.sqrt(np.square(vectors).sum(2))  # shape: T, P(P-1) / 2
+    distance = np.sqrt(np.square(vectors).sum(2))  # shape: P(P-1)/2, T
 
-    avg_distance = distance.sum(0)  # shape: P(P-1) / 2
+    avg_distance = distance.sum(1)  # shape: P(P-1) / 2
     avg_distance /= avg_distance.max() + 1e-8
 
     distance_stats = np.zeros((num_pairs, 2))
-    for i in range(distance.shape[1]):
-        max_ = distance[:, i].max() + 1e-8
-        distance[:, i] /= max_
-        distance_stats[i] = distance[:, i].mean()
-        distance_stats[i] = distance[:, i].std()
+    for i in range(num_pairs):
+        max_ = distance[i].max() + 1e-8
+        distance[i] /= max_
+        distance_stats[i] = distance[i].mean()
+        distance_stats[i] = distance[i].std()
 
     distance_feature = np.concatenate(
         (avg_distance.reshape(-1), distance_stats.reshape(-1)))
     # shape: P(P-1) / 2 * 3
 
     angle = np.arctan2(vectors[:, :, 1], vectors[:, :, 0]) + np.pi
-    angle = angle.transpose(1, 0)  # shape: P(P-1) / 2, T
+    # shape: P(P-1) / 2, T
+
     angle_histograms = helper(angle, bins, num_pairs, max_val=np.pi * 2)
     angle_histograms = angle_histograms.reshape(-1)  # shape: P(P-1) / 2 * bins
 
@@ -84,12 +85,12 @@ steps = np.array([1, 2, 3, 4, 6, 8], dtype=np.int64)
 
 @jit(nopython=True, fastmath=True)
 def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
-    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    """Given the keypoint skeleton, a numpy array of size (num_key_points, T,
     2), returns the temporal features, a one-dimensional array.
 
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
-            number of frames and `P` is the number of key points.
+        keypoint (np.array): numpy array of size of (P, T, 2) where `T` is the
+        number of frames and `P` is the number of key points.
         steps (np.array): one-dimensional integer array of the temporal steps.
         bins (int): number of bins.
     Returns:
@@ -102,14 +103,17 @@ def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
 
     for i in range(num_steps):
         step = steps[i]
-        move = keypoint[:-step] - keypoint[step:]  # shape T - step, P, 2
+        move = keypoint[:, :-step] - keypoint[:, step:]
+        # shape: P, T - step, 2
+
         angle = np.arctan2(move[:, :, 1], move[:, :, 0]) + np.pi
-        angle = angle.transpose(1, 0)  # shape: P, T - step
+        # shape: P, T - step
+
         histograms = helper(angle, bins, num_key_points, max_val=np.pi * 2)
         all_histograms[i] = histograms
 
         for j in range(num_key_points):
-            move_vectors = move[:, j]  # shape:  T - step, 2
+            move_vectors = move[j]  # shape:  T - step, 2
             distance = np.sqrt(np.square(move_vectors).sum(-1))
             distance_feature[0, i, j] = distance.sum()
             distance /= distance.max() + 1e-8
@@ -142,37 +146,29 @@ def get_angle(x: np.array, y: np.array):
 
 
 def get_triplet_features(keypoint: np.array, bins: int = BINS):
-    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    """Given the keypoint skeleton, a numpy array of size (num_key_points, T,
     2), returns the triplet features, a one-dimensional array.
 
     Suppose keypoint p1 and p2 are connected with p3. The angle between
         p3 -> p1 and p2 -> p3 is a triplet feature.
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
-            number of frames and `P` is the number of key points.
+        keypoint (np.array): numpy array of size of (P, T, 2) where `T` is the
+        number of frames and `P` is the number of key points.
         steps (np.array): one-dimensional integer array of the temporal steps.
         bins (int): number of bins.
     Returns:
         np.ndarray: the one-dimensional spatial features.
     """
-    mid = keypoint[:, triplet1]  # shape: T, num_of_triplets, 2
-    vector1 = mid - keypoint[:, triplet0]  # shape: T, num_of_triplets, 2
-    vector2 = keypoint[:, triplet2] - mid  # shape: T, num_of_triplets, 2
-    theta = get_angle(vector1, vector2)  # shape: T, num_of_triplets
-    L = theta.shape[1]  # num_of_triplets
-    theta = theta.transpose(1, 0)  # shape: num_of_triplets, T
+    mid = keypoint[triplet1]  # shape: num_of_triplets, T, 2
+    vector1 = mid - keypoint[triplet0]  # shape: num_of_triplets, T, 2
+    vector2 = keypoint[triplet2] - mid  # shape: num_of_triplets, T, 2
+    theta = get_angle(vector1, vector2)  # shape: num_of_triplets, T
+    L = theta.shape[0]  # num_of_triplets
     all_histograms = helper(theta, bins=bins, num_hist=L, max_val=np.pi)
     return all_histograms.reshape(-1)
 
 
 def get_fit_sample(keypoint: np.array, bins: float = BINS):
-    """
-    Args:
-        keypoint (np.array): the keypoint skeleton of size
-            (num_key_points, T, 2). `num_key_points` should be 14, `T` can be
-            any integer no small than 8.
-        bins (int): the number of bins. Defaults to 18.
-    """
     x = []
     x.append(get_spatial_features(keypoint, bins=bins))
     x.append(get_temporal_features(keypoint, bins=bins, steps=steps))

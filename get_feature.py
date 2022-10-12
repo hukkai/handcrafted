@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import os
 import time
 
 import numpy as np
@@ -51,8 +52,8 @@ def main():
 
     trainX, trainY = batch_augment(trainX, trainY)
 
-    testX = x['x_test'].reshape(-1, 32, num_key_points, 3)[..., :2]
-    testX = testX.transpose(0, 2, 1, 3)
+    testX = x['x_test'].reshape(-1, args.num_frames, num_key_points, 3)
+    testX = testX[..., :2].transpose(0, 2, 1, 3)
     testY = x['y_test'].argmax(1)
 
     pool = multiprocessing.Pool(num_cpus)
@@ -73,6 +74,9 @@ def main():
     for idx, feat in enumerate(out):
         X.append(out[idx])
         Y.append(trainY[idx])
+
+    if not os.path.isdir(args.saved_folder):
+        os.mkdir(args.saved_folder)
 
     np.save('%s/trainX' % args.saved_folder, np.array(X))
     np.save('%s/trainY' % args.saved_folder, np.array(Y))
