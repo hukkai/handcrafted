@@ -3,16 +3,16 @@ import numpy as np
 num_key_points = 14
 
 
-def batch_augment(trainX: np.array, 
-                  trainY: np.array, 
-                  flip_aug: bool = True, 
-                  scale_aug: bool = True, 
+def batch_augment(trainX: np.array,
+                  trainY: np.array,
+                  flip_aug: bool = True,
+                  scale_aug: bool = True,
                   rotate_aug: bool = True):
     """
     Args:
         trainX (np.array): the batch training inputs. Numpy array of size
-            [B, num_key_points, T, 2] where `B` is the number of samples, 
-            `num_key_points` is the number of key points, fixed as 14 in this 
+            [B, num_key_points, T, 2] where `B` is the number of samples,
+            `num_key_points` is the number of key points, fixed as 14 in this
             task, and `T` is the number of frames.
         trainY (np.array): the batch training labels. Numpy array of size [B].
     """
@@ -36,7 +36,7 @@ def batch_augment(trainX: np.array,
 
     if scale_aug:
         augmented = [trainX]
-        for scale in 4/3, 3/2, 2/3, 3/4:
+        for scale in 4 / 3, 3 / 2, 2 / 3, 3 / 4:
             newX = trainX.copy()
             newX[..., 0] *= scale
             augmented.append(newX)
@@ -47,7 +47,7 @@ def batch_augment(trainX: np.array,
     if rotate_aug:
         augmented = [trainX]
         for theta in np.pi / 12, -np.pi / 12:
-            M = [[np.cos(theta), np.sin(theta)], 
+            M = [[np.cos(theta), np.sin(theta)],
                  [-np.sin(theta), np.cos(theta)]]
             M = np.array(M)
             newX = trainX @ M

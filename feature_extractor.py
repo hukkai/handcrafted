@@ -1,27 +1,25 @@
 import numpy as np
 from numba import jit
 
-
 BINS = 18
 
 
 @jit(nopython=True, fastmath=True)
 def helper(array: np.ndarray, bins: int, num_hist: int, max_val: float):
-    """
-    Given a numpy array of size (num_hist, N), returns a histogram array of 
-        size (num_hist, bins). Each row of the ouput array is the histogram of
-        the corresponding row of the input array.
+    """Given a numpy array of size (num_hist, N), returns a histogram array of
+    size (num_hist, bins). Each row of the output array is the histogram of the
+    corresponding row of the input array.
 
     Args:
         array (np.ndarray): numpy array of size (num_hist, N).
         bins (int): number of bins.
         num_hist (int): number of histograms.
         max_val (float): The maximum value in the array.
-            The mininmum value in the array should be (no smaller than) 0. It 
+            The mininmum value in the array should be (no smaller than) 0. It
             is the users' responsibility to check this.
 
     Returns:
-        np.ndarray: histograms of size (num_hist, bins). 
+        np.ndarray: histograms of size (num_hist, bins).
     """
     array = np.round_(array / (max_val / (bins - 1)), 0, array)
     array = array.astype(np.uint8)
@@ -42,11 +40,11 @@ indexes = np.array(indexes).T
 
 @jit(nopython=True, fastmath=True)
 def get_spatial_features(keypoint: np.array, bins: int):
-    """
-    Given the keypoint skeleton, a numpy array of size (T, num_key_points, 2), 
-        returns the spatial features, a one-dimensional array.
+    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    2), returns the spatial features, a one-dimensional array.
+
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the 
+        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
             number of frames and `P` is the number of key points.
         bins (int): number of bins.
     Returns:
@@ -69,7 +67,7 @@ def get_spatial_features(keypoint: np.array, bins: int):
         distance_stats[i] = distance[:, i].std()
 
     distance_feature = np.concatenate(
-        (avg_distance.reshape(-1), distance_stats.reshape(-1)))  
+        (avg_distance.reshape(-1), distance_stats.reshape(-1)))
     # shape: P(P-1) / 2 * 3
 
     angle = np.arctan2(vectors[:, :, 1], vectors[:, :, 0]) + np.pi
@@ -86,11 +84,11 @@ steps = np.array([1, 2, 3, 4, 6, 8], dtype=np.int64)
 
 @jit(nopython=True, fastmath=True)
 def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
-    """
-    Given the keypoint skeleton, a numpy array of size (T, num_key_points, 2), 
-        returns the temporal features, a one-dimensional array.
+    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    2), returns the temporal features, a one-dimensional array.
+
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the 
+        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
             number of frames and `P` is the number of key points.
         steps (np.array): one-dimensional integer array of the temporal steps.
         bins (int): number of bins.
@@ -120,30 +118,21 @@ def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
 
     distance_feature[0] /= distance_feature[0].max() + 1e-8
 
-    feature = np.concatenate((distance_feature.reshape(-1), 
-                              all_histograms.reshape(-1)))
+    feature = np.concatenate(
+        (distance_feature.reshape(-1), all_histograms.reshape(-1)))
     return feature
 
 
-triplet = np.array([
-       [0, 1, 2],
-       [1, 2, 3],
-       [5, 4, 3],
-       [4, 3, 2],
-       [6, 7, 8],
-       [7, 8, 12],
-       [11, 10, 9],
-       [10, 9, 12]]).T
+triplet = np.array([[0, 1, 2], [1, 2, 3], [5, 4, 3], [4, 3, 2], [6, 7, 8],
+                    [7, 8, 12], [11, 10, 9], [10, 9, 12]]).T
 
 triplet0, triplet1, triplet2 = triplet
 
 
 def get_angle(x: np.array, y: np.array):
-    """
-    Given two numpy arrays of the same size [N1, N2, ..., Nk, 2],
-    returns a numpy array of size the [N1, N2, ..., Nk], the angle between the 
-    two arrays.
-    """
+    """Given two numpy arrays of the same size [N1, N2, ..., Nk, 2], returns a
+    numpy array of size the [N1, N2, ..., Nk], the angle between the two
+    arrays."""
     dot = (x * y).sum(-1)
     norm_x = np.linalg.norm(x, axis=-1)
     norm_y = np.linalg.norm(y, axis=-1)
@@ -153,13 +142,13 @@ def get_angle(x: np.array, y: np.array):
 
 
 def get_triplet_features(keypoint: np.array, bins: int = BINS):
-    """
-    Given the keypoint skeleton, a numpy array of size (T, num_key_points, 2), 
-        returns the triplet features, a one-dimensional array.
-        Suppose keypoint p1 and p2 are connected with p3. The angle between 
+    """Given the keypoint skeleton, a numpy array of size (T, num_key_points,
+    2), returns the triplet features, a one-dimensional array.
+
+    Suppose keypoint p1 and p2 are connected with p3. The angle between
         p3 -> p1 and p2 -> p3 is a triplet feature.
     Args:
-        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the 
+        keypoint (np.array): numpy array of size of (T, P, 2) where `T` is the
             number of frames and `P` is the number of key points.
         steps (np.array): one-dimensional integer array of the temporal steps.
         bins (int): number of bins.
@@ -179,8 +168,8 @@ def get_triplet_features(keypoint: np.array, bins: int = BINS):
 def get_fit_sample(keypoint: np.array, bins: float = BINS):
     """
     Args:
-        keypoint (np.array): the keypoint skeleton of size 
-            (num_key_points, T, 2). `num_key_points` should be 14, `T` can be 
+        keypoint (np.array): the keypoint skeleton of size
+            (num_key_points, T, 2). `num_key_points` should be 14, `T` can be
             any integer no small than 8.
         bins (int): the number of bins. Defaults to 18.
     """

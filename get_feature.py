@@ -4,17 +4,17 @@ import time
 
 import numpy as np
 
-from feature_extractor import get_fit_sample
 from data_augmentation import batch_augment
+from feature_extractor import get_fit_sample
 
 
 def parser_args():
     parser = argparse.ArgumentParser(
-        description='feature extraction from skeleton data.'
-        )
-    parser.add_argument('--path_to_data', type=str, 
+        description='feature extraction from skeleton data.')
+    parser.add_argument('--path_to_data',
+                        type=str,
                         default='/home/eddiej/'
-                                'oosto_action_skeleton_v0.2.0.npz')
+                        'oosto_action_skeleton_v0.2.0.npz')
     parser.add_argument('--num_key_points', type=int, default=14)
     parser.add_argument('--num_frames', type=int, default=32)
     parser.add_argument('--num_cpus', type=int, default=-1)
