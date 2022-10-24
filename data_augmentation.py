@@ -1,59 +1,75 @@
+from typing import List
+
 import numpy as np
 
-num_key_points = 14
+num_key_points = 17
+
+left_kp = [1, 3, 5, 7, 9, 11, 13, 15]
+right_kp = [2, 4, 6, 8, 10, 12, 14, 16]
 
 
-def batch_augment(trainX: np.array,
+def flip(input_keypoint):
+    keypoint = input_keypoint.copy()
+    kp_x = keypoint[..., 0]
+    kp_x[kp_x != 0] = kp_x.max() - kp_x[kp_x != 0]
+
+    new_order = list(range(num_key_points))
+    for left, right in zip(left_kp, right_kp):
+        new_order[left] = right
+        new_order[right] = left
+
+    keypoint = keypoint[new_order]
+    return keypoint
+
+
+def resize(input_keypoint, scale):
+    keypoint = input_keypoint.copy()
+    keypoint[..., 0] *= scale
+    return keypoint
+
+
+def rotate(input_keypoint, rotation_matrix):
+    return input_keypoint @ rotation_matrix
+
+
+def batch_augment(trainX: List[np.array],
                   trainY: np.array,
                   flip_aug: bool = True,
                   scale_aug: bool = True,
-                  rotate_aug: bool = True):
+                  rotate_aug: bool = False):
     """
     Args:
-        trainX (np.array): the batch training inputs. Numpy array of size
-            [B, num_key_points, T, 2] where `B` is the number of samples,
-            `num_key_points` is the number of key points, fixed as 14 in this
-            task, and `T` is the number of frames.
-        trainY (np.array): the batch training labels. Numpy array of size [B].
+        trainX (List[np.array]): the batch training inputs. A list of
+            key-points. Each element in the list should be a numpy array of
+            size (P, T, N, 2) where `P` equals to `num_key_points`, `T` is the
+            number of frames and `N` is the number of persons.
+        trainY (np.array): the batch training labels. Numpy array of size [B]
+            where B equals to the length of `trainX`.
     """
     if flip_aug:
-        left_kp = [0, 1, 2, 6, 7, 8]
-        right_kp = [5, 4, 3, 11, 10, 9]
-
-        X_flip = trainX.copy()
-        kp_x = X_flip[..., 0]
-        kp_x[kp_x != 0] = kp_x.max() - kp_x[kp_x != 0]
-
-        new_order = list(range(num_key_points))
-        for left, right in zip(left_kp, right_kp):
-            new_order[left] = right
-            new_order[right] = left
-
-        X_flip = X_flip[:, new_order]
-
-        trainX = np.concatenate([trainX, X_flip])
+        X_flip = [flip(keypoint) for keypoint in trainX]
+        trainX = trainX + X_flip
         trainY = np.concatenate([trainY] * 2)
 
     if scale_aug:
-        augmented = [trainX]
+        augmented = []
         for scale in 4 / 3, 3 / 2, 2 / 3, 3 / 4:
-            newX = trainX.copy()
-            newX[..., 0] *= scale
-            augmented.append(newX)
+            newX = [resize(keypoint, scale) for keypoint in trainX]
+            augmented += newX
 
-        trainX = np.concatenate(augmented)
+        trainX = trainX + augmented
         trainY = np.concatenate([trainY] * 5)
 
     if rotate_aug:
-        augmented = [trainX]
+        augmented = []
         for theta in np.pi / 12, -np.pi / 12:
             M = [[np.cos(theta), np.sin(theta)],
                  [-np.sin(theta), np.cos(theta)]]
             M = np.array(M)
-            newX = trainX @ M
-            augmented.append(newX)
+            newX = [rotate(keypoint, M) for keypoint in trainX]
+            augmented += newX
 
-        trainX = np.concatenate(augmented)
+        trainX = trainX + augmented
         trainY = np.concatenate([trainY] * 3)
 
     return trainX, trainY

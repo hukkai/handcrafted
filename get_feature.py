@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import os
+import pickle
 import time
 
 import numpy as np
@@ -12,49 +13,43 @@ from feature_extractor import get_fit_sample
 def parser_args():
     parser = argparse.ArgumentParser(
         description='feature extraction from skeleton data.')
-    parser.add_argument('--path_to_data',
+    parser.add_argument('--train_pickle',
                         type=str,
-                        default='/home/eddiej/'
-                        'oosto_action_skeleton_v0.2.0.npz')
-    parser.add_argument('--num_key_points', type=int, default=14)
-    parser.add_argument('--num_frames', type=int, default=32)
+                        default='./data/ntu60_xsub_train.pkl')
+    parser.add_argument('--val_pickle',
+                        type=str,
+                        default='./data/ntu60_xsub_val.pkl')
     parser.add_argument('--num_cpus', type=int, default=-1)
     parser.add_argument('--saved_folder', type=str, default='./data/')
     args = parser.parse_args()
     return args
 
 
-def check_num_key_points(num_key_points):
-    if num_key_points != 14:
-        raise ValueError('The number of num_key_points is not 14.'
-                         'You need to make changes to `feature_extractor.py`'
-                         'as the number is pre-define in the jit for '
-                         'acceleration. If you have done this, you can skip '
-                         'this check.')
+def load_data(pickle_path):
+    X, Y = [], []
+    with open(pickle_path, 'rb') as f:
+        x = pickle.load(f)
+    for item in x:
+        keypoint = item['keypoint']
+        if keypoint.max() > 0:
+            keypoint = keypoint.astype(np.float32).transpose(2, 1, 0, 3)
+            X.append(keypoint)
+            Y.append(item['label'])
+    return X, np.array(Y)
 
 
 def main():
     args = parser_args()
-    num_key_points = args.num_key_points
-    check_num_key_points(num_key_points)
 
-    x = np.load(args.path_to_data)
-    trainX = x['x_train'].reshape(-1, args.num_frames, num_key_points, 3)
-    # confidence score is not used
-    trainX = trainX[..., :2].transpose(0, 2, 1, 3)
-    # the shape of trainX should be [batch, num_key_points, num_frames, 2]
-    trainY = x['y_train'].argmax(1)
+    trainX, trainY = load_data(args.train_pickle)
+    trainX, trainY = batch_augment(trainX, trainY)
+
+    valX, valY = load_data(args.val_pickle)
 
     if args.num_cpus > 0:
         num_cpus = args.num_cpus
     else:
         num_cpus = multiprocessing.cpu_count()
-
-    trainX, trainY = batch_augment(trainX, trainY)
-
-    testX = x['x_test'].reshape(-1, args.num_frames, num_key_points, 3)
-    testX = testX[..., :2].transpose(0, 2, 1, 3)
-    testY = x['y_test'].argmax(1)
 
     pool = multiprocessing.Pool(num_cpus)
 
@@ -67,31 +62,20 @@ def main():
     pool.close()
     speed = time.time() - t
 
-    speed = speed / trainX.shape[0] * 1000 * num_cpus / 8
+    speed = speed / len(out) * 1000 * num_cpus / 8
     print('Speed %.2f ms per sample per 8 cpu' % speed)
-
-    X, Y = [], []
-    for idx, feat in enumerate(out):
-        X.append(out[idx])
-        Y.append(trainY[idx])
 
     if not os.path.isdir(args.saved_folder):
         os.mkdir(args.saved_folder)
 
-    np.save('%s/trainX' % args.saved_folder, np.array(X))
-    np.save('%s/trainY' % args.saved_folder, np.array(Y))
+    np.save('%s/trainX' % args.saved_folder, np.array(out))
+    np.save('%s/trainY' % args.saved_folder, trainY)
 
     pool = multiprocessing.Pool(num_cpus)
-    out = pool.map(get_fit_sample, testX)
+    out = pool.map(get_fit_sample, valX)
 
-    X, Y = [], []
-    for idx, feat in enumerate(out):
-        if feat is not None:
-            X.append(out[idx])
-            Y.append(testY[idx])
-
-    np.save('%s/testX' % args.saved_folder, np.array(X))
-    np.save('%s/testY' % args.saved_folder, np.array(Y))
+    np.save('%s/valX' % args.saved_folder, np.array(out))
+    np.save('%s/valY' % args.saved_folder, valY)
 
 
 if __name__ == '__main__':
