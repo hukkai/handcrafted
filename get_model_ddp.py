@@ -5,10 +5,16 @@ import torch
 import torch.nn as nn
 
 
-def get_dataset(feature_dir='./data/', device='cuda'):
+def get_dataset(feature_dir='./data/',
+                num_gpus=4,
+                rank=0,
+                device='cuda'):
 
     X = np.load('%s/trainX.npy' % feature_dir)
     y = np.load('%s/trainY.npy' % feature_dir)
+    num_samples = X.shape[0] // num_gpus
+    X = X[num_samples * rank: num_samples * (rank + 1)]
+    y = y[num_samples * rank: num_samples * (rank + 1)]
 
     X_train = torch.tensor(X, dtype=torch.float32)
     y_train = torch.from_numpy(y)
@@ -22,10 +28,6 @@ def get_dataset(feature_dir='./data/', device='cuda'):
     y_train = y_train.to(device)
     X_test = X_test.to(device)
     y_test = y_test.to(device)
-
-    # mu = X_train.mean()
-    # X_train -= mu
-    # X_test -= mu
 
     return X_train, y_train, X_test, y_test
 
@@ -50,13 +52,24 @@ class simple(nn.Module):
         return loss
 
 
-def train_model(weight_decay, feature_dir='./data/', device='cuda'):
-    data = get_dataset(feature_dir=feature_dir, device=device)
+def train_model(weight_decay, feature_dir='./data/'):
+    num_gpus = torch.distributed.get_world_size()
+    rank = torch.distributed.get_rank()
+    torch.cuda.set_device(rank)
+    device = torch.device('cuda')
+
+    data = get_dataset(feature_dir=feature_dir,
+                       num_gpus=num_gpus,
+                       rank=rank,
+                       device=device)
     X_train, y_train, X_test, y_test = data
 
     model = simple(X_train.shape[1], y_train.max().item() + 1)
-    model = model.to(X_train.device)
-    loss_fn = nn.CrossEntropyLoss().to(X_train.device)
+    model = model.to(device)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=[rank], output_device=rank)
+
+    loss_fn = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.LBFGS(model.parameters())
 
     def closure():
@@ -100,5 +113,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--wd', type=float, default=2e-3)
     parser.add_argument('--feature_dir', type=str, default='./data/')
+    parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     train_model(args.wd, feature_dir=args.feature_dir)
