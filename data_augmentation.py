@@ -1,3 +1,4 @@
+import multiprocessing
 from typing import List
 
 import numpy as np
@@ -22,13 +23,15 @@ def flip(input_keypoint):
     return keypoint
 
 
-def resize(input_keypoint, scale):
+def resize(input_):
+    input_keypoint, scale = input_
     keypoint = input_keypoint.copy()
     keypoint[..., 0] *= scale
     return keypoint
 
 
-def rotate(input_keypoint, rotation_matrix):
+def rotate(input_):
+    input_keypoint, rotation_matrix = input_
     return input_keypoint @ rotation_matrix
 
 
@@ -36,7 +39,7 @@ def batch_augment(trainX: List[np.array],
                   trainY: np.array,
                   flip_aug: bool = True,
                   scale_aug: bool = True,
-                  rotate_aug: bool = False):
+                  rotate_aug: bool = True):
     """
     Args:
         trainX (List[np.array]): the batch training inputs. A list of
@@ -46,19 +49,22 @@ def batch_augment(trainX: List[np.array],
         trainY (np.array): the batch training labels. Numpy array of size [B]
             where B equals to the length of `trainX`.
     """
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+
     if flip_aug:
-        X_flip = [flip(keypoint) for keypoint in trainX]
+        X_flip = pool.map(flip, trainX)
         trainX = trainX + X_flip
         trainY = np.concatenate([trainY] * 2)
 
     if scale_aug:
         augmented = []
-        for scale in 4 / 3, 3 / 2, 2 / 3, 3 / 4:
-            newX = [resize(keypoint, scale) for keypoint in trainX]
+        for scale in 3 / 2, 2 / 3:
+            newX = [(keypoint, scale) for keypoint in trainX]
             augmented += newX
 
+        augmented = pool.map(resize, augmented)
         trainX = trainX + augmented
-        trainY = np.concatenate([trainY] * 5)
+        trainY = np.concatenate([trainY] * 3)
 
     if rotate_aug:
         augmented = []
@@ -66,9 +72,10 @@ def batch_augment(trainX: List[np.array],
             M = [[np.cos(theta), np.sin(theta)],
                  [-np.sin(theta), np.cos(theta)]]
             M = np.array(M)
-            newX = [rotate(keypoint, M) for keypoint in trainX]
+            newX = [(keypoint, M) for keypoint in trainX]
             augmented += newX
 
+        augmented = pool.map(rotate, augmented)
         trainX = trainX + augmented
         trainY = np.concatenate([trainY] * 3)
 

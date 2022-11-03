@@ -15,10 +15,10 @@ def parser_args():
         description='feature extraction from skeleton data.')
     parser.add_argument('--train_pickle',
                         type=str,
-                        default='./data/ntu60_xsub_train.pkl')
+                        default='./data/ntu120_xsub_train.pkl')
     parser.add_argument('--val_pickle',
                         type=str,
-                        default='./data/ntu60_xsub_val.pkl')
+                        default='./data/ntu120_xsub_val.pkl')
     parser.add_argument('--num_cpus', type=int, default=-1)
     parser.add_argument('--saved_folder', type=str, default='./data/')
     args = parser.parse_args()
@@ -55,6 +55,7 @@ def main():
 
     # Test if the function works well before multiprocessing.
     _ = get_fit_sample(trainX[0])
+    print(_.shape)
     del _
 
     t = time.time()

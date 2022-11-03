@@ -35,6 +35,7 @@ def helper(array: np.ndarray, bins: int, num_hist: int, max_val: float):
         for j in array[i]:
             all_histograms[i, j] += 1
     all_histograms /= array.shape[1]
+    all_histograms -= 1 / bins
     return all_histograms
 
 
@@ -114,7 +115,7 @@ def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
         for j in range(num_key_points):
             move_vectors = move[j]  # shape:  T - step, N, 2
             distance = np.sqrt(np.square(move_vectors).sum(-1))
-            distance_feature[0, i, j] = distance.sum()
+            distance_feature[0, i, j] = distance.mean()
             distance /= distance.max() + 1e-8
             distance_feature[1, i, j] = distance.mean()
             distance_feature[2, i, j] = distance.std()
@@ -128,8 +129,7 @@ def get_temporal_features(keypoint: np.array, steps: np.array, bins: int):
 
 triplet = np.array([[0, 5, 7], [0, 5, 11], [0, 6, 8], [0, 6, 12], [5, 7, 9],
                     [6, 8, 10], [5, 11, 13], [5, 11, 12], [11, 13, 15],
-                    [6, 12, 14], [12, 14, 16], [0, 1, 3], [0, 2, 4],
-                    [11, 12, 14]]).T
+                    [6, 12, 14], [12, 14, 16], [11, 12, 14]]).T
 
 triplet0, triplet1, triplet2 = triplet
 
